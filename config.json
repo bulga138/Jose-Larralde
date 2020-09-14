@@ -1,0 +1,11 @@
+{
+  "author": {
+    "name": "Bulga"
+  },
+  "description": "LarraldeBot",
+  "main": "larralde.js",
+  "name": "larralde-bot",
+  "prefix": "!",
+  "token": "token-here",
+  "version": "0.0.1"
+}
