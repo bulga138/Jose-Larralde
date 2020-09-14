@@ -1,1 +1,2 @@
-# bis-4-aminopyridine-k-N-1-dichloridocobalt-II-
+# LarraldeBot
+Un bot de José Larralde que al nombrarlo, se pone a recitar sus coplas. Cosas que pasan.
