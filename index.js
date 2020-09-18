@@ -23,12 +23,8 @@ client.once('ready', () => {
 });
 
 client.on('message', message => {
-	if (message.content.includes(`Larralde`)) {
+	if message.content.toLowerCase().includes(`larralde`)) {
 // Declare random for replies
-	let random = Math.floor(Math.random() * replies.length);
-		message.channel.send(replies[random]);
-	} else if (message.content.includes('larralde')) {
-		// Declare random for select the replies
 	let random = Math.floor(Math.random() * replies.length);
 		message.channel.send(replies[random]);
 	}
