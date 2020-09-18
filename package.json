@@ -1,0 +1,30 @@
+{
+  "name": "larraldebot",
+  "version": "1.0.0",
+  "description": "José Larralde hecho bot de Discord para escuchar música y verlo recitar sus letras.",
+  "main": "index.js",
+  "scripts": {
+    "test": "!ping"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bulga138/Jose-Larralde.git"
+  },
+  "keywords": [
+    "nodejs",
+    "bot",
+    "discord",
+    "larralde"
+  ],
+  "author": "Bulga",
+  "license": "MIT",
+  "dependencies": {
+    "@discordjs/opus": "^0.3.2",
+    "discord.js": "^12.3.1",
+    "ffmpeg": "0.0.4",
+    "ffmpeg-static": "^4.2.7",
+    "ytdl-core": "^3.2.2",
+    "ytpl": "^1.0.1",
+    "ytsr": "^1.0.1"
+  }
+}
