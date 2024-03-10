@@ -1,8 +1,6 @@
 // require the discord.js module
-const { Client, MessageEmbed } = require('discord.js');
+const { Client, EmbedBuilder, GatewayIntentBits,Collection  } = require('discord.js');
 
-// require prefix and token from config.json
-// const { prefix, token } = require("./config.json");
 require('dotenv').config()
 const prefix = process.env.PREFIX;
 const token = process.env.TOKEN;
@@ -12,34 +10,46 @@ const youtubeAPI = process.env.YOUTUBE_API_KEY;
 const ytdl = require("ytdl-core");
 
 // create a new Discord client
-const client = new Client();
+const client = new Client({ intents: [ 
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMessageReactions,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessageTyping,
+    GatewayIntentBits.DirectMessages,
+    GatewayIntentBits.DirectMessageReactions,
+    GatewayIntentBits.DirectMessageTyping,
+    GatewayIntentBits.MessageContent,
+    ]
+});
 
 // Include the file-system module
 const fs = require("fs");
 
-//const path = require('path');
-
 const ytpl = require('ytpl');
+
+const { joinVoiceChannel, createAudioPlayer, getVoiceConnection, VoiceConnectionStatus } = require('@discordjs/voice');
+
+const player = createAudioPlayer();
 
 const streamOptions = {
     seek: 0,
     volume: 1
 };
 
-//const cron = require('node-cron');
+function getHex() {
+    return '#' + Math.floor(Math.random() * 0xFFFFFF).toString(16).padEnd(6, '0');
+  }
 
 const idPlaylist = "PLVDzogCteAXr1D0H3pHo1v1mO0i7mj0QW";
 
-// Read the text file that contains all replies
-let reply_data = fs.readFileSync("./replies.txt").toString();
-
-// Take each reply in the text file and put them into an array
-let replies = reply_data.split("\n");
+// Read the text file that contains all replies and take each reply in the text file and put them into an array
+let replies = fs.readFileSync("./replies.txt").toString().split("\n");
 
 let musicUrls = [];
 
-// when the client is ready, run this code, this event will only trigger one time after logging in
-client.once("ready", () => {
+// When the client is ready, run this code, this event will only trigger one time after logging in
+client.on("ready", () => {
     console.log(`Ready as ${client.user.tag}!`);
 });
 client.once("reconnecting", () => {
@@ -48,82 +58,71 @@ client.once("reconnecting", () => {
 client.once("disconnect", () => {
     console.log("Disconnect!");
 });
-client.on("message", async message => {
+// client.on('interactionCreate', async interaction => {
+//     if (!interaction.isChatInputCommand()) return;
+//     console.log(interaction);
+//     if (interaction.commandName === 'ping') {
+//       await interaction.reply('Pong!');
+//     }
+// });
+
+client.on("messageCreate", async message => {
     if (message.author.bot) return;
+    
+    console.log(message.content);
+
     if (message.content.toLowerCase().startsWith(`${prefix}play`)) {
         let args = message.content.split(" ");
         let url = args[1];
         const voiceChannel = message.member.voice.channel;
-        try {
-            if (voiceChannel === null) {
-                const embed = new MessageEmbed()
-                    .setTitle(':robot: | `No te quierá hacer el vivo, andá para el canal de voz y volveme a llamar`')
-                    .setColor('RANDOM');
-                return message.channel.send({ embed });
-            } else {
-                const voiceConnection = await voiceChannel.join();
+        if (voiceChannel === null) {
+            const embed = new EmbedBuilder()
+                .setTitle(':robot: | `No te quierá hacer el vivo, andá para el canal de voz y volveme a llamar`')
+                .setColor(getHex());
+            return message.channel.send({ embeds: [embed]});
+        } else {
+            const voiceConnection = await voiceChannel.join();
 
-                if (ytdl.validateURL(url)) {
-                    console.log("Valid URL!");
-                    let flag = musicUrls.some(element => element === url);
-                    if (!flag) {
-                        musicUrls.push(url);
-                        if (voiceChannel != null) {
-                            const songInfo = await ytdl.getBasicInfo(url);
-                            const song = {
-                                title: songInfo.videoDetails.title,
-                                url: songInfo.videoDetails.video_url,
-                                thumbnail: songInfo.player_response.videoDetails.thumbnail.thumbnails[songInfo.player_response.videoDetails.thumbnail.thumbnails.length - 1].url,
-                            };
+            if (ytdl.validateURL(url)) {
+                let flag = musicUrls.some(element => element === url);
+                if (!flag) {
+                    musicUrls.push(url);
+                    if (voiceChannel != null) {
+                        const songInfo = await ytdl.getBasicInfo(url);
+                        const song = {
+                            title: songInfo.videoDetails.title,
+                            url: songInfo.videoDetails.video_url,
+                            thumbnail: songInfo.player_response.videoDetails.thumbnail.thumbnails[songInfo.player_response.videoDetails.thumbnail.thumbnails.length - 1].url,
+                        };
 
-                            if (voiceConnection.status === 0 && musicUrls.length - 1 !== 0) {
-                                let embed = new MessageEmbed()
-                                    .setThumbnail(song.thumbnail)
-                                    .addFields(
-                                        { name: `:robot: | \`Agregada a la lista de reproducción\``, value: `\ ${song.title}` },
-                                        { name: 'URL:', value: `${song.url}` }
-                                    )
-                                    .setColor('RANDOM');
-                                message.channel.send(embed);
-                            } else {
-                                try {
-                                    const voiceConnection = await voiceChannel.join();
-                                    await playSong(message.channel, voiceConnection, voiceChannel);
+                        if (voiceConnection.status === 0 && musicUrls.length - 1 !== 0) {
+                            let embed = new EmbedBuilder()
+                                .setThumbnail(song.thumbnail)
+                                .addFields(
+                                    { name: `:robot: | \`Agregada a la lista de reproducción\``, value: `\ ${song.title}` },
+                                    { name: 'URL:', value: `${song.url}` }
+                                )
+                                .setColor(getHex());
+                            message.channel.send(embed);
+                        } else {
+                            try {
+                                const voiceConnection = await voiceChannel.join();
+                                await playSong(message.channel, voiceConnection, voiceChannel, true);
 
-                                } catch (ex) {
-                                    console.error(ex);
-                                }
+                            } catch (ex) {
+                                console.error(ex);
                             }
-
                         }
 
                     }
+
                 }
-                console.log("Invalid URL!");
             }
-        } catch (er) {
-            console.error(er);
         }
     } else if (message.content.startsWith(`${prefix}skip`)) {
-        const voiceChannel = message.member.voice.channel;
-        try {
-            const voiceConnection = await voiceChannel.join();
-            await skipi(message.channel, voiceConnection, voiceChannel);
-        } catch (er) {
-            console.error(er);
-        }
-        return
+
     } else if (message.content.startsWith(`${prefix}stop`)) {
-        const voiceChannel = message.member.voice.channel;
 
-        try {
-            const voiceConnection = await voiceChannel.join();
-            await stop(message.channel, voiceConnection, voiceChannel);
-
-        } catch (ex) {
-            console.error(ex);
-        }
-        return;
     } else if (message.content.includes(`${prefix}ping`)) {
         try {
             await ping(message);
@@ -132,7 +131,7 @@ client.on("message", async message => {
         }
     } else if (message.content.startsWith(`${prefix}beep`)) {
         try {
-            beep(message);
+            await beep(message);
         }
         catch (ex) {
             console.error(er);
@@ -140,24 +139,23 @@ client.on("message", async message => {
         // message.channel.send(':robot: | `Boop` | :gear:');
     } else if (message.content.toLowerCase().includes(`larralde`)) {
         try {
-            randomReply(message)
+            await randomReply(message)
         }
         catch (er) {
             console.error(er);
         }
     } else if (message.content === `${prefix}server`) {
         try {
-            server(message);
+            await server(message);
         } catch (er) {
             console.error(er);
         }
     } else if (message.content === `${prefix}user`) {
         try {
-            user(message);
+            await user(message);
         } catch (er) {
             console.error(er);
         }
-
     } else if (message.content === `${prefix}info`) {
         try {
             await info(message);
@@ -165,43 +163,20 @@ client.on("message", async message => {
             return console.err(er);
         }
     } else if (message.content === `${prefix}mute`) {
-        try {
-            const voiceChannel = message.member.voice.channel;
-            const voiceConnection = await voiceChannel.join();
-            await mute(message.channel, voiceConnection, voiceChannel);
 
-        } catch (ex) {
-            console.error(ex);
-        }
     } else if (message.content.startsWith(`${prefix}pause`)) {
 
-        try {
-            const voiceChannel = message.member.voice.channel;
-            const voiceConnection = await voiceChannel.join();
-            message.channel.send("Pausa");
-            await pause(message.channel, voiceConnection, voiceChannel);
-
-        } catch (ex) {
-            console.error(ex);
-        }
     } else if (message.content.startsWith(`${prefix}resume`)) {
 
-
-        try {
-            const voiceChannel = message.member.voice.channel;
-            const voiceConnection = await voiceChannel.join();
-            message.channel.send("Resuming");
-            await resume(message.channel, voiceConnection, voiceChannel);
-
-        } catch (ex) {
-            console.error(ex);
-        }
     } else if (message.content.startsWith(`${prefix}say`)) {
 
-
         try {
-            message.delete({ timeout: 1000 }); //Supposed to delete message
-            message.reply(message.content.slice(5, message.content.length));
+            if (message.content.slice(5, message.content.length)) {
+                message.delete({ timeout: 1000 }); //Supposed to delete message    
+                message.reply(message.content.slice(5, message.content.length));
+            } else {
+                message.channel.send("You need to enter a valid message!")
+            };
         }
         catch (ex) {
             console.error(ex);
@@ -210,28 +185,23 @@ client.on("message", async message => {
     } else if (message.content.startsWith(`${prefix}deleteMsg`)) {
         let args = message.content.split(" ");
         let number = args[1];
-        try { deleteMessages(message, number) }
+        try { await deleteMessages(message, number) }
         catch (er) { console.error(er) };
     } else if (message.content.startsWith(`${prefix}seek`)) {
-        let args = message.content.split(" ");
-        let sec = args[1] || 0;
-        const voiceChannel = message.member.voice.channel;
-        const voiceConnection = await voiceChannel.join();
-        try { seek(message.channel, voiceConnection, voiceChannel, sec) }
-        catch (er) { console.error(er) };
+        
     } else if (message.content === `${prefix}`) {
         message.channel.send("You need to enter a valid command!");
-
     }
 });
 
 client.on("message", async message => {
     if (message.author.bot) return;
     if (message.content.toLowerCase().includes('cantate una pampa') && !message.member.voice.channel) {
-        const embed = new MessageEmbed()
+        const embed = new EmbedBuilder()
             .setTitle(':robot: | `No te quierá hacer el vivo, andá para el canal de voz y volveme a llamar`')
-            .setColor('RANDOM');
-        return message.channel.send({ embed });
+            .setColor(getHex());
+        return await message.channel.send({ embeds: [embed] });
+
     }
     else if (message.content.toLowerCase().includes('cantate una pampa')) {
         if (message.member.voice.channel) {
@@ -254,96 +224,34 @@ client.on("message", async message => {
     }
 }
 );
-client.on('guildMemberAdd', member => {
+client.on('guildMemberAdd', async member => {
     const channel = member.guild.channels.cache.find(ch => ch.name === 'general');
     if (!channel) return;
-    const embed = new MessageEmbed()
+    const embed = new EmbedBuilder()
         .setDescription(`Hola, loc@de mierda, **${member.user.username}**`)
-        .setColor('RANDOM');
-    channel.send(embed);
+        .setColor(getHex());
+    await message.channel.send({ embeds: [embed] });
 });
-client.on('guildMemberRemove', member => {
+client.on('guildMemberRemove', async member => {
     const channel = member.guild.channels.cache.find(ch => ch.name === 'general');
     if (!channel) return;
-    const embed = new MessageEmbed()
+    const embed = new EmbedBuilder()
         .setDescription(`**${member.user.username}**, se fue a la mierda che`)
-        .setColor('RANDOM');
-    channel.send(embed);
+        .setColor(getHex());
+    await message.channel.send({ embeds: [embed] });
 });
-
-/*
-client.on("message", async message => {
-    if (message.author.bot) return;
-
-    if(message.content.toLowerCase().startsWith(`${prefix}play`)) {
-        let args = message.content.split(" ");
-        let url = args[1];
-        const voiceChannel = message.member.voice.channel;
-        if (voiceChannel === null){
-            const embed = new MessageEmbed()
-            .setTitle(':robot: | `No te quierá hacer el vivo, andá para el canal de voz y volveme a llamar`')
-            .setColor('RANDOM');
-            return message.channel.send({embed});
-        }else {
-        const voiceConnection = await voiceChannel.join();
-
-        if(ytdl.validateURL(url))
-        {
-            //console.log("Valid URL!");
-            let flag = musicUrls.some(element => element === url);
-            if(!flag) {
-                musicUrls.push(url);
-                if(voiceChannel != null)
-                {
-                    const songInfo = await  ytdl.getBasicInfo(url);
-                    const song = {
-                                title: songInfo.videoDetails.title,
-                                url: songInfo.videoDetails.video_url,
-                                thumbnail: songInfo.player_response.videoDetails.thumbnail.thumbnails[songInfo.player_response.videoDetails.thumbnail.thumbnails.length-1].url,
-                            };
-                    
-                    if(voiceConnection.status === 0 && musicUrls.length-1 !==0)
-                    {
-                        let embed = new MessageEmbed()
-                        .setThumbnail(song.thumbnail)
-                        .addFields(
-                            { name: `:robot: | \`Agregada a la lista de reproducción\``, value: `\ ${song.title}` },
-                            { name: 'URL:', value:  `${song.url}` }
-                        )
-                        .setColor('RANDOM');
-                        message.channel.send(embed);
-                    } else
-                    {
-                            try{
-                                const voiceConnection = await voiceChannel.join();
-                                await playSong(message.channel, voiceConnection, voiceChannel);
-                                        
-                            } catch(ex){
-                                console.error(ex);
-                            }
-                        }
-         
-                }
-                
-            }
-        }
-    }
-    }    
-});
-*/
-
 
 async function info(message) {
     if (musicUrls.length !== 0) {
-        let embed = new MessageEmbed()
+        let embed = new EmbedBuilder()
             .addFields(
                 { name: 'Canciones por tocar:', value: `${musicUrls.length - 1}` },
                 { name: '¿Querés el listado de temas que faltan?', value: '`Tenés 15 segundos para responder reaccionando.`\n✅:\ Sí\n❎:\ No' }
             )
-            .setColor('RANDOM')
+            .setColor(getHex())
             .setTitle(':robot:| Acá está la info')
-            .setColor('RANDOM');
-        const msg = await message.channel.send({ embed })
+            .setColor(getHex());
+        const msg = await message.channel.send({ embeds: [embed] });
         msg.react('✅');
         msg.react('❎');
 
@@ -362,61 +270,61 @@ async function info(message) {
                     };
 
                     let firstIteration = true;
-                    musicInfo.forEach(video => {
-                        let embed = new MessageEmbed()
-                            .setColor('RANDOM');
+                    musicInfo.forEach( async video => {
+                        let embed = new EmbedBuilder()
+                            .setColor(getHex());
                         if (firstIteration) {
                             embed.setTitle(':robot:| Acá está la info');
                             embed.addFields({ name: `:notes: | Now playing`, value: `${JSON.stringify(video.title)}` },
                                 { name: 'URL:', value: `${JSON.stringify(video.url)}` },
                                 { name: 'id:', value: `${musicInfo.indexOf(video)}` },
                             )
-                            message.channel.send({ embed })
+                            await message.channel.send({ embeds: [embed] });
                         } else {
                             embed.addFields(
                                 { name: ':robot: :notes: |` Next:`', value: `${JSON.stringify(video.title)}` },
                                 { name: '`URL:`', value: `${JSON.stringify(video.url)}` },
                                 { name: 'id:', value: `${musicInfo.indexOf(video)}` },
                             )
-                            message.channel.send({ embed });
+                            await message.channel.send({ embeds: [embed] });
                         };
                         firstIteration = false;
                     });
-                    let embed = new MessageEmbed()
+                    let embed = new EmbedBuilder()
                         .addFields(
                             { name: 'Canciones por tocar:', value: `${musicUrls.length - 1}` },
                             { name: '¿Querés el listado de temas que faltan?', value: ':robot:| `Done`' }
                         )
-                        .setColor('RANDOM')
+                        .setColor(getHex())
                         .setTitle(':robot:| Acá está la info')
-                        .setColor('RANDOM');
-                    msg.edit({ embed });
+                        .setColor(getHex());
+                    msg.edit({ embeds:[embed] });
                 } else if (collected.first().emoji.name === '❎') {
-                    let embed = new MessageEmbed()
+                    let embed = new EmbedBuilder()
                         .addFields(
                             { name: 'Canciones por tocar:', value: `${musicUrls.length - 1}` },
                             { name: '¿Querés el listado de temas que faltan?', value: '`❎`:\ No' }
                         )
-                        .setColor('RANDOM')
+                        .setColor(getHex())
                         .setTitle(':robot:| Acá está la info')
-                    return msg.edit({ embed });
-                } else return message.channel.send("error")
+                    return msg.edit({ embeds:[embed] });
+                } else return await message.channel.send({ embeds: ["error"] });
             })
             .catch(async () => {
-                let embed = new MessageEmbed()
+                let embed = new EmbedBuilder()
                     .addFields(
                         { name: 'Canciones por tocar:', value: `${musicUrls.length - 1}` },
                         { name: '¿Querés el listado de temas que faltan?', value: ':robot:| `Time\'s up`' }
                     )
                     .setTitle(':robot:| Acá está la info')
-                    .setColor('RANDOM');
-                msg.edit({ embed });
+                    .setColor(getHex());
+                msg.edit({ embeds:[embed] });
             })
     } else {
-        let embed = new MessageEmbed()
+        let embed = new EmbedBuilder()
             .setTitle(':robot:| `No hay canciones en la lista`')
-            .setColor('RANDOM');
-        return message.channel.send(embed)
+            .setColor(getHex());
+        return await message.channel.send({ embeds: [embed] });
     }
 };
 
@@ -441,18 +349,18 @@ async function seek(messageChannel, voiceConnection, voiceChannel, sec) {
 
 async function randomReply(message) {
     let random = Math.floor(Math.random() * replies.length);
-    const embed = new MessageEmbed()
+    const embed = new EmbedBuilder()
         .addFields(
             { name: ':robot: | `Aca te va una estrofa che:`', value: `**${replies[random]}**` }
         )
-        .setColor('RANDOM');
-    message.channel.send({ embed });
-};
+        .setColor(getHex());
+        await message.channel.send({ embeds: [embed] });
+    };
 
 async function playSong(messageChannel, voiceConnection, voiceChannel, iteration) {
     let random = Math.floor(Math.random() * musicUrls.length);
     getRandom(random);
-
+    console.log(random, currentId, musicUrls.length, musicUrls[random])
     const stream = ytdl(musicUrls[random], { filter: 'audioonly' });
 
     const songInfo = await ytdl.getBasicInfo(musicUrls[random]);
@@ -462,21 +370,33 @@ async function playSong(messageChannel, voiceConnection, voiceChannel, iteration
         url: songInfo.videoDetails.video_url,
         thumbnail: songInfo.player_response.videoDetails.thumbnail.thumbnails[songInfo.player_response.videoDetails.thumbnail.thumbnails.length - 1].url,
     };
-    let firstIteration = iteration;
-    const embed = new MessageEmbed()
+    console.log(song);
 
+    let firstIteration = iteration;
+    const embed = new EmbedBuilder()
         .addFields(
             { name: `:notes: | Now playing`, value: `${song.title}` },
             { name: 'URL:', value: `${song.url}` },
             { name: 'id', value: `${random}` }
         )
-        .setColor('RANDOM')
+        .setColor(getHex())
         .setThumbnail(song.thumbnail);
+
     firstIteration ? embed.setTitle(':robot: | Vamo\' a tocar una milonga che') : embed.setTitle(':robot: | Vamo\' a tocar la que viene');
-    messageChannel.send({ embed });
-    const dispacher = voiceConnection.play(stream, streamOptions);
-    console.log(dispacher.volume);
-    dispacher.on('finish', () => {
+
+    await message.channel.send({ embeds: [embed] });
+    const connection = getVoiceConnection(voiceChannel.guild.id);
+    connection.subscribe(player);
+
+    player.on('stateChange', (oldState, newState) => {
+        console.log(`State change: ${oldState.status} -> ${newState.status}`);
+    }
+    );
+    player.on('error', (error) => {
+        console.error(`Error: ${error.message} with track ${musicUrls[random]}`);
+    }
+    );
+    player.on('finish', () => {
         musicUrls.splice(random, 1);
         if (musicUrls.length === 0) {
             voiceChannel.leave();
@@ -485,10 +405,27 @@ async function playSong(messageChannel, voiceConnection, voiceChannel, iteration
                 playSong(messageChannel, voiceConnection, voiceChannel, false);
             }, 1000);
         }
+    }
+    )
 
-    })
+    // const dispacher = player.play(stream, streamOptions);
+    // console.log(dispacher.volume);
+    // dispacher.on('finish', () => {
+    //     musicUrls.splice(random, 1);
+    //     if (musicUrls.length === 0) {
+    //         voiceChannel.leave();
+    //     } else {
+    //         setTimeout(() => {
+    //             playSong(messageChannel, voiceConnection, voiceChannel, false);
+    //         }, 1000);
+    //     }
+
+    // }
+    // )
 
 };
+
+
 
 let currentId = 0;
 const getRandom = (random) => {
@@ -547,11 +484,11 @@ async function skipi(messageChannel, voiceConnection, voiceChannel) {
 async function stop(messageChannel, voiceConnection, voiceChannel) {
     const stream = ytdl(musicUrls[currentId], { filter: 'audioonly' });
     const dispacher = voiceConnection.play(stream, streamOptions);
-    const embed = new MessageEmbed()
+    const embed = new EmbedBuilder()
         .setTitle(':robot: | `Bueno, dejo de tocar`')
-        .setColor('RANDOM');
-    messageChannel.send({ embed });
-    dispacher.destroy();
+        .setColor(getHex());
+        await message.channel.send({ embeds: [embed] });
+        dispacher.destroy();
     musicUrls = [];
     voiceChannel.leave();
 
@@ -563,20 +500,20 @@ async function mute(messageChannel, voiceConnection, _voiceChannel) {
     const dispacher = voiceConnection.play(stream);
     console.log(dispacher.volume);
     if (vol === 1) {
-        const embed = new MessageEmbed()
+        const embed = new EmbedBuilder()
             .setTitle(':robot: | `Mute`')
-            .setColor('RANDOM');
-        messageChannel.send({ embed });
-        dispacher.setVolume(0)
+            .setColor(getHex());
+            await message.channel.send({ embeds: [embed] });
+            dispacher.setVolume(0)
         return vol = 0;
 
 
     } else {
-        const embed = new MessageEmbed()
+        const embed = new EmbedBuilder()
             .setTitle(':robot: | `Unmute`')
-            .setColor('RANDOM');
-        messageChannel.send({ embed });
-        dispacher.setVolume(1)
+            .setColor(getHex());
+            await message.channel.send({ embeds: [embed] });
+            dispacher.setVolume(1)
         return vol = 1;
     }
 
@@ -585,59 +522,78 @@ async function mute(messageChannel, voiceConnection, _voiceChannel) {
 };
 
 const deleteMessages = async (message, number) => {
-    let fetched;
     try {
-        do {
-            fetched = await message.channel.messages.fetch({ limit: number });
-            message.channel.bulkDelete(fetched);
+      let deleted = new Collection();
+      let toDelete = number;
+  
+      while (toDelete > 0) {
+        const fetched = await message.channel.messages.fetch({ limit: Math.min(toDelete, 100) }); // Fetch max 100 messages at once
+  
+        // Filter messages to delete within the 14-day limit
+        const deletable = fetched.filter(msg => Date.now() - msg.createdTimestamp < 1209600000); // 14 days in milliseconds
+  
+        deleted = deleted.concat(deletable);
+        toDelete -= deletable.size;
+  
+        if (deletable.size > 0) {
+          await message.channel.bulkDelete(deletable);
+        } else {
+          // No more messages within the 14-day limit are found
+          break;
         }
-        while (fetched.size >= 2);
+      }
+  
+      if (deleted.size > 0) {
+        console.log(`Successfully deleted ${deleted.size} messages.`); // Informational message
+      } else {
+        console.log('No messages found within the 14-day limit for deletion.');
+      }
+    } catch (error) {
+      console.error('Error deleting messages:', error);
     }
-    catch (er) { console.error(er) };
-
-};
+  };
 
 const ping = async (message) => {
-    const embed = new MessageEmbed()
+    const embed = new EmbedBuilder()
         .setTitle(':robot: | `Pinging...`')
-        .setColor('RANDOM');
-    const msg = await message.reply({ embed });
+        .setColor(getHex());
+    const msg = await message.channel.send({ embeds: [embed] });
     const latency = msg.createdTimestamp - message.createdTimestamp;
     embed.setTitle(':robot: | `Pong`🏓');
     embed.addFields(
         { name: '`Latency is:`', value: `${latency} ms` },
         { name: '`API Latency is: `', value: `${Math.round(client.ws.ping)} ms` })
-    msg.edit({ embed });
+    await msg.edit({ embeds: [embed] });
 };
 
 const beep = async (message) => {
-    const embed = new MessageEmbed()
+    const embed = new EmbedBuilder()
         .setTitle(':robot: | `Boop` | :gear:')
-        .setColor('RANDOM');
-    message.channel.send({ embed });
+        .setColor(getHex());
+    await message.channel.send({ embeds: [embed] });
 };
 const server = async (message) => {
-    const embed = new MessageEmbed()
+    const embed = new EmbedBuilder()
         .setTitle(':robot: | `Acá tenés la info`')
         .addFields(
             { name: '`Server name:`', value: `${message.guild.name}` },
             { name: '`Total members:`', value: `${message.guild.memberCount}` }
         )
-        .setColor('RANDOM');
-    message.channel.send({ embed });
-};
+        .setColor(getHex());
+    await message.channel.send({ embeds: [embed] });
+    };
 
 const user = async (message) => {
-    let avatarEmbed = new MessageEmbed()
+    let avatarEmbed = new EmbedBuilder()
         .setTitle(':robot: | `Acá tenés la info`')
         .addFields(
             { name: '`Your username:`', value: `${message.author.username}` },
             { name: '`Your ID:`', value: `${message.author.id}` }
         )
         .setImage(message.author.avatarURL())
-        .setColor('RANDOM');
-    message.channel.send(avatarEmbed);
-};
+        .setColor(getHex());
+        await message.channel.send({ embeds: [avatarEmbed] });
+    };
 
 /*
 # ┌────────────── second (optional)

@@ -22,12 +22,13 @@
   "dependencies": {
     "@discordjs/opus": "^0.9.0",
     "@discordjs/voice": "^0.16.1",
-    "discord.js": "^12.5.3",
+    "discord.js": "^14.14.1",
     "dotenv": "^16.4.5",
     "ffmpeg": "0.0.4",
     "ffmpeg-static": "^4.2.7",
+    "libsodium-wrappers": "^0.7.13",
     "node-cron": "^2.0.3",
-    "ytdl-core": "^3.2.2",
+    "ytdl-core": "^4.11.5",
     "ytpl": "^1.0.1",
     "ytsr": "^1.0.1"
   },
@@ -35,6 +36,7 @@
     "nodemon": "^2.0.7"
   },
   "overrides": {
-    "semver": "^7.5.3"
+    "semver": "^7.5.3",
+    "undici": "^6.6.1"
   }
 }
